@@ -11,7 +11,7 @@ n8n をセルフホストする
 
 ```bash
 docker volume create n8n_data
-docker run -it --rm --name n8n -p 5678:5678 -v n8n_data:/home/node/.n8n docker.n8n.io/n8nio/n8n
+docker run -it --rm --name n8n -p 5678:5678 -v n8n_data:/home/node/.n8n -e N8N_SECURE_COOKIE=false docker.n8n.io/n8nio/n8n
 ```
 
 > **NOTE**  
@@ -65,5 +65,48 @@ echo "Restoration of volume '$VOLUME_NAME' from backup file $BACKUP_FILE complet
 ### パターン2: ローカルのディレクトリをマウントして起動
 
 ```bash
-docker run -it --rm --name n8n -p 5678:5678 -v "$HOME/.n8n:/home/node/.n8n" docker.n8n.io/n8nio/n8n
+docker run -it --rm --name n8n -p 5678:5678 -v "$HOME/.n8n:/home/node/.n8n" -e N8N_SECURE_COOKIE=false docker.n8n.io/n8nio/n8n
+```
+
+# Note
+
+**Docker コンテナを管理者権限なしで実行する**
+
+```bash
+sudo groupadd docker
+sudo usermod -aG docker ${USER}
+newgrp docker
+```
+
+**docker volume を消去**
+
+```bash
+docker volume rm n8n_data
+```
+
+**別マシンで作成したバックアップ用のtarファイルを別のマシンに転送して適用する**
+
+送信元マシンでの作業
+
+```bash
+# カレントディレクトリにバックアップファイルを作成 (/path/.n8n/* にデータが保存されている場合)
+tar -cvf ./backup_n8n.tar -C /path/.n8n .
+
+# tarファイルを適用先マシンに送信する
+scp backup.tar user@remote_host:/path/to/destination
+# ex. scp /n8n_data_backup_20240101_000000.tar remote_username@x.x.x.x:/home/username
+```
+
+送信先マシンでの作業
+
+- 先に送信先マシンで現在の Docker Volume をバックアップする。手順は「バックアップを作成する」を参照
+- 「docker volume を消去」の手順でvolumeを削除する
+- `docker volume create $VOLUME_NAME` でボリュームを作成する（ex. `docker volume create n8n_data` ）
+- 「バックアップを適用する」の手順で送信元マシンで作成したバックアップファイルをvolumeに適用する
+- dockerコンテナからファイルの閲覧権限がないケースがあるので以下で権限を与える
+
+```bash
+ID=$(id -u your_username)
+GROUP=$(id -g your_username)
+docker run --rm -v n8n_data:/volume -v $(pwd):/backup busybox chown -R $ID:$GROUP /volume
 ```
